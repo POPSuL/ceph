@@ -1465,8 +1465,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
 
   case CEPH_LOCK_IFLOCK:
     ::encode(inode.version, bl);
-    ::encode(fcntl_locks, bl);
-    ::encode(flock_locks, bl);
+    _encode_file_locks(bl);
     break;
 
   case CEPH_LOCK_IPOLICY:
@@ -1726,8 +1725,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 
   case CEPH_LOCK_IFLOCK:
     ::decode(inode.version, p);
-    ::decode(fcntl_locks, p);
-    ::decode(flock_locks, p);
+    _decode_file_locks(p);
     break;
 
   case CEPH_LOCK_IPOLICY:
@@ -2733,8 +2731,8 @@ void CInode::remove_client_cap(client_t client)
   mdcache->num_caps--;
 
   //clean up advisory locks
-  bool fcntl_removed = fcntl_locks.remove_all_from(client);
-  bool flock_removed = flock_locks.remove_all_from(client);
+  bool fcntl_removed = fcntl_locks ? fcntl_locks->remove_all_from(client) : false;
+  bool flock_removed = flock_locks ? flock_locks->remove_all_from(client) : false; 
   if (fcntl_removed || flock_removed) {
     list<MDSInternalContextBase*> waiters;
     take_waiting(CInode::WAIT_FLOCK, waiters);
@@ -3448,8 +3446,8 @@ void CInode::encode_export(bufferlist& bl)
 
   _encode_locks_full(bl);
 
-  ::encode(fcntl_locks, bl);
-  ::encode(flock_locks, bl);
+  _encode_file_locks(bl);
+
   ENCODE_FINISH(bl);
 
   get(PIN_TEMPEXPORTING);
@@ -3540,10 +3538,7 @@ void CInode::decode_import(bufferlist::iterator& p,
 
   _decode_locks_full(p);
 
-  if (struct_v >= 5) {
-    ::decode(fcntl_locks, p);
-    ::decode(flock_locks, p);
-  }
+  _decode_file_locks(p);
 
   DECODE_FINISH(p);
 }
